@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cursos cadastrados</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card larga">
+    <h1>Cursos cadastrados</h1>
+    <p class="sub">Registros consultados na API (MySQL da VM2)</p>
+
+    <div id="mensagem" class="mensagem" role="status"></div>
+
+    <table id="tabela" hidden>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nome do curso</th>
+          <th>Instrutor responsável</th>
+          <th class="num">Preço</th>
+          <th class="num">Vagas</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <a class="link" href="index.html">← Cadastrar novo curso</a>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    (async () => {
+      const tabela = document.getElementById('tabela');
+      const corpo = tabela.querySelector('tbody');
+      try {
+        const resp = await fetch(`${API_URL}/cursos`);
+        if (!resp.ok) throw new Error(`Erro HTTP ${resp.status}`);
+        const cursos = await resp.json();
+
+        if (!cursos.length) {
+          mostrarMensagem('Nenhum curso cadastrado ainda.', 'info');
+          return;
+        }
+        for (const c of cursos) {
+          const tr = document.createElement('tr');
+          [c.id, c.nome, c.instrutor, formatarPreco(c.preco), c.vagas].forEach((valor, i) => {
+            const td = document.createElement('td');
+            td.textContent = valor;
+            if (i >= 3) td.className = 'num';
+            tr.appendChild(td);
+          });
+          corpo.appendChild(tr);
+        }
+        tabela.hidden = false;
+      } catch (err) {
+        mostrarMensagem(`Falha ao listar cursos: ${err.message}`, 'erro');
+      }
+    })();
+  </script>
+</body>
+</html>

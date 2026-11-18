@@ -1,0 +1,27 @@
+#cloud-config
+# Prepara as VMs (VM1 e VM2) para utilizar Docker
+
+package_update: true
+
+packages:
+  - ca-certificates
+  - curl
+  - python3
+
+# Swap de 1 GB (ajuda o MySQL em instâncias pequenas como t2.micro)
+swap:
+  filename: /swapfile
+  size: 1073741824
+
+runcmd:
+  # Instala Docker Engine + plugin Docker Compose (script oficial)
+  - curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+  - sh /tmp/get-docker.sh
+  - systemctl enable --now docker
+  # Permite que o usuário ubuntu use o Docker sem sudo
+  - usermod -aG docker ubuntu
+  # Diretórios onde o Ansible vai implantar os serviços
+  - mkdir -p /opt/app /opt/api
+  - chown ubuntu:ubuntu /opt/app /opt/api
+
+final_message: "cloud-init finalizado: Docker pronto apos $UPTIME segundos"

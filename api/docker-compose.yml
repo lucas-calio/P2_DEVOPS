@@ -1,0 +1,51 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: cursos-mysql
+    restart: always
+    # Ajustes para rodar bem em instâncias pequenas (t2.micro)
+    command: ["--performance-schema=OFF", "--innodb-buffer-pool-size=64M"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: ${DB_NAME:-cursosdb}
+      MYSQL_USER: ${DB_USER:-cursos}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-cursos123}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+    networks:
+      - backend
+    # Sem "ports": o MySQL fica acessível apenas pela API, na rede interna do Docker
+
+  api:
+    build: .
+    image: cursos-api
+    container_name: cursos-api
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-cursosdb}
+      DB_USER: ${DB_USER:-cursos}
+      DB_PASSWORD: ${DB_PASSWORD:-cursos123}
+      # Origem da aplicação web (VM1). O Ansible grava o valor correto em .env
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+    ports:
+      - "3000:3000"
+    networks:
+      - backend
+
+volumes:
+  mysql_data:
+
+networks:
+  backend:

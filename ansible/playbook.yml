@@ -1,0 +1,132 @@
+---
+# Avaliação Prática de DevOps - Prova C - Cadastro de Cursos
+# Uso: ansible-playbook -i ansible/inventory ansible/playbook.yml
+
+# ---------------------------------------------------------------------------
+# 1) Configuração comum: garante que as VMs estão prontas com Docker
+# ---------------------------------------------------------------------------
+- name: Configurar VMs com Docker
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Aguardar acesso SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Aguardar o cloud-init terminar
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+      failed_when: false
+
+    - name: Verificar se o Docker está instalado
+      ansible.builtin.command: docker --version
+      register: docker_check
+      changed_when: false
+      failed_when: false
+
+    - name: Instalar Docker (caso o cloud-init não tenha instalado)
+      ansible.builtin.shell: curl -fsSL https://get.docker.com | sh
+      when: docker_check.rc != 0
+
+    - name: Garantir serviço Docker ativo
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+# ---------------------------------------------------------------------------
+# 2) VM2 - API Node.js + MySQL (docker compose)
+# ---------------------------------------------------------------------------
+- name: Implantar API Node.js e MySQL na VM2
+  hosts: api
+  become: true
+  gather_facts: false
+  vars:
+    web_origin: "http://{{ hostvars[groups['web'][0]]['ansible_host'] }}"
+  tasks:
+    - name: Copiar arquivos da API
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../api/"
+        dest: /opt/api/
+        mode: "0644"
+
+    - name: Configurar origem permitida no CORS (aplicação web da VM1)
+      ansible.builtin.copy:
+        dest: /opt/api/.env
+        mode: "0644"
+        content: |
+          CORS_ORIGIN={{ web_origin }}
+
+    - name: Subir contêineres (MySQL + API)
+      ansible.builtin.command: docker compose up -d --build
+      args:
+        chdir: /opt/api
+
+    - name: Aguardar API responder
+      ansible.builtin.uri:
+        url: http://localhost:3000/health
+        status_code: 200
+      register: api_health
+      until: api_health.status == 200
+      retries: 40
+      delay: 5
+
+# ---------------------------------------------------------------------------
+# 3) VM1 - Servidor web (nginx) + aplicação HTML
+# ---------------------------------------------------------------------------
+- name: Implantar aplicação web na VM1
+  hosts: web
+  become: true
+  gather_facts: false
+  vars:
+    api_url: "http://{{ hostvars[groups['api'][0]]['ansible_host'] }}:3000"
+  tasks:
+    - name: Copiar arquivos da aplicação web
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../app/"
+        dest: /opt/app/
+        mode: "0644"
+
+    - name: Apontar a aplicação para a API da VM2
+      ansible.builtin.copy:
+        dest: /opt/app/config.js
+        mode: "0644"
+        content: |
+          // Gerado pelo Ansible
+          window.API_URL = "{{ api_url }}";
+
+    - name: Construir imagem do servidor web
+      ansible.builtin.command: docker build -t cursos-web /opt/app
+
+    - name: Remover contêiner anterior (se existir)
+      ansible.builtin.command: docker rm -f cursos-web
+      changed_when: false
+      failed_when: false
+
+    - name: Iniciar contêiner do servidor web
+      ansible.builtin.command: >
+        docker run -d --name cursos-web --restart always -p 80:80 cursos-web
+
+    - name: Aguardar servidor web responder
+      ansible.builtin.uri:
+        url: http://localhost/
+        status_code: 200
+      register: web_health
+      until: web_health.status == 200
+      retries: 20
+      delay: 3
+
+# ---------------------------------------------------------------------------
+# 4) Resumo
+# ---------------------------------------------------------------------------
+- name: Resumo da implantação
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Endereços
+      ansible.builtin.debug:
+        msg:
+          - "Aplicação web (VM1): http://{{ hostvars[groups['web'][0]]['ansible_host'] }}"
+          - "API REST (VM2):      http://{{ hostvars[groups['api'][0]]['ansible_host'] }}:3000/cursos"

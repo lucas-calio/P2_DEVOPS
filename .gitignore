@@ -1,0 +1,12 @@
+# OpenTofu
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Chaves e segredos
+*.pem
+.env
+
+# Node
+node_modules/
