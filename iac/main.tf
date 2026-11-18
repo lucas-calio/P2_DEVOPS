@@ -17,6 +17,10 @@ terraform {
       source  = "hashicorp/local"
       version = "~> 2.4"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 }
 
@@ -30,7 +34,7 @@ provider "aws" {
 variable "aws_region" {
   description = "Região da AWS"
   type        = string
-  default     = "us-east-1"
+  default     = "us-east-2"
 }
 
 variable "instance_type" {
@@ -39,16 +43,24 @@ variable "instance_type" {
   default     = "t2.micro"
 }
 
-variable "key_name" {
-  description = "Nome do key pair JÁ EXISTENTE na AWS (no AWS Academy normalmente é 'vockey')"
-  type        = string
-  default     = "vockey"
+# ---------------------------------------------------------------------------
+# Chave SSH gerada pelo próprio OpenTofu (não precisa copiar nenhum .pem).
+# A chave privada é gravada em ansible/avaliacao_key.pem (ignorada pelo git).
+# ---------------------------------------------------------------------------
+resource "tls_private_key" "ssh" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
 }
 
-variable "ssh_private_key_path" {
-  description = "Caminho da chave privada (.pem) usada pelo Ansible para acessar as VMs"
-  type        = string
-  default     = "~/.ssh/labsuser.pem"
+resource "aws_key_pair" "avaliacao" {
+  key_name_prefix = "avaliacao-cursos-"
+  public_key      = tls_private_key.ssh.public_key_openssh
+}
+
+resource "local_sensitive_file" "ssh_private_key" {
+  filename        = "${path.module}/../ansible/avaliacao_key.pem"
+  content         = tls_private_key.ssh.private_key_pem
+  file_permission = "0400"
 }
 
 # ---------------------------------------------------------------------------
@@ -138,7 +150,7 @@ resource "aws_security_group" "vm2_api" {
 resource "aws_instance" "vm1" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
-  key_name                    = var.key_name
+  key_name                    = aws_key_pair.avaliacao.key_name
   vpc_security_group_ids      = [aws_security_group.vm1_web.id]
   associate_public_ip_address = true
   user_data                   = file("${path.module}/cloud_init.yaml")
@@ -156,7 +168,7 @@ resource "aws_instance" "vm1" {
 resource "aws_instance" "vm2" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.instance_type
-  key_name                    = var.key_name
+  key_name                    = aws_key_pair.avaliacao.key_name
   vpc_security_group_ids      = [aws_security_group.vm2_api.id]
   associate_public_ip_address = true
   user_data                   = file("${path.module}/cloud_init.yaml")
@@ -184,7 +196,7 @@ resource "local_file" "ansible_inventory" {
 
     [all:vars]
     ansible_user=ubuntu
-    ansible_ssh_private_key_file=${var.ssh_private_key_path}
+    ansible_ssh_private_key_file=${abspath(local_sensitive_file.ssh_private_key.filename)}
     ansible_python_interpreter=/usr/bin/python3
     ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
   EOT

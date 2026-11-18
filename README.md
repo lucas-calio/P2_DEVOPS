@@ -26,8 +26,9 @@
  OpenTofu provisiona as VMs | cloud-init prepara o Docker | Ansible implanta os serviços
 ```
 
-- **OpenTofu** (`iac/main.tf`): cria as duas instâncias EC2 (Ubuntu 22.04), os security groups
-  (VM1: 22/80 — VM2: 22/3000) e gera automaticamente o `ansible/inventory` com os IPs.
+- **OpenTofu** (`iac/main.tf`): cria, em `us-east-2`, as duas instâncias EC2 (Ubuntu 22.04), os
+  security groups (VM1: 22/80 — VM2: 22/3000) e o par de chaves SSH, e gera automaticamente o
+  `ansible/inventory` com os IPs.
 - **cloud-init** (`iac/cloud_init.yaml`): instala Docker Engine + Docker Compose e cria swap.
 - **Ansible** (`ansible/playbook.yml`): garante o Docker, sobe MySQL + API na VM2 com
   `docker compose` e sobe o nginx com a aplicação HTML na VM1, já apontando para o IP da VM2.
@@ -62,19 +63,17 @@ Exemplo de corpo do `POST /curso`:
 
 ## Pré-requisitos (máquina de controle — Linux, WSL ou EC2)
 
-- OpenTofu ≥ 1.6, Ansible, credenciais da AWS configuradas (`~/.aws/credentials`)
-- Um key pair existente na AWS (no AWS Academy: `vockey`) e a chave privada `.pem`
-  correspondente com permissão `chmod 400`
+- OpenTofu ≥ 1.6, Ansible, credenciais da AWS configuradas (`aws configure`, região `us-east-2`)
+- Não é preciso nenhum `.pem`: o OpenTofu gera o par de chaves SSH, cadastra na AWS e grava a
+  chave privada em `ansible/avaliacao_key.pem` (ignorada pelo git), já referenciada no inventário
 
 ## Instruções de execução
 
 ```bash
-# 1) Provisionar as VMs (também gera ansible/inventory)
+# 1) Provisionar as VMs em us-east-2 (também gera ansible/inventory e a chave SSH)
 cd iac
 tofu init
-tofu apply -auto-approve \
-  -var="key_name=vockey" \
-  -var="ssh_private_key_path=~/.ssh/labsuser.pem"
+tofu apply -auto-approve
 cd ..
 
 # 2) Configurar e implantar os serviços
@@ -95,7 +94,7 @@ curl http://IP_VM2:3000/cursos
 Conferir os registros persistidos no MySQL da VM2:
 
 ```bash
-ssh -i ~/.ssh/labsuser.pem ubuntu@IP_VM2 \
+ssh -i ansible/avaliacao_key.pem ubuntu@IP_VM2 \
   "sudo docker exec cursos-mysql mysql -ucursos -pcursos123 cursosdb -e 'SELECT * FROM cursos;'"
 ```
 
