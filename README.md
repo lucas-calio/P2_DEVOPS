@@ -10,8 +10,8 @@
 
 ## Endereço da aplicação
 
-- **Aplicação web (VM1):** http://IP_PUBLICO_VM1
-- **API REST (VM2):** http://IP_PUBLICO_VM2:3000/cursos
+- **Aplicação web (VM1):** http://18.220.154.135
+- **API REST (VM2):** http://18.191.175.134:3000/cursos
 
 ## Arquitetura
 

@@ -40,7 +40,7 @@ variable "aws_region" {
 variable "instance_type" {
   description = "Tipo das instâncias EC2"
   type        = string
-  default     = "t2.micro"
+  default     = "t3.micro"
 }
 
 # ---------------------------------------------------------------------------
@@ -66,19 +66,10 @@ resource "local_sensitive_file" "ssh_private_key" {
 # ---------------------------------------------------------------------------
 # Imagem: Ubuntu 22.04 LTS oficial (Canonical)
 # ---------------------------------------------------------------------------
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720108685"] # Canonical
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
+# Parâmetro público mantido pela Canonical no SSM: sempre aponta para a AMI
+# estável mais recente do Ubuntu 22.04 na região.
+data "aws_ssm_parameter" "ubuntu_ami" {
+  name = "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
 }
 
 # ---------------------------------------------------------------------------
@@ -148,7 +139,7 @@ resource "aws_security_group" "vm2_api" {
 # VM1 - Aplicação web
 # ---------------------------------------------------------------------------
 resource "aws_instance" "vm1" {
-  ami                         = data.aws_ami.ubuntu.id
+  ami                         = data.aws_ssm_parameter.ubuntu_ami.value
   instance_type               = var.instance_type
   key_name                    = aws_key_pair.avaliacao.key_name
   vpc_security_group_ids      = [aws_security_group.vm1_web.id]
@@ -166,7 +157,7 @@ resource "aws_instance" "vm1" {
 # VM2 - API + banco
 # ---------------------------------------------------------------------------
 resource "aws_instance" "vm2" {
-  ami                         = data.aws_ami.ubuntu.id
+  ami                         = data.aws_ssm_parameter.ubuntu_ami.value
   instance_type               = var.instance_type
   key_name                    = aws_key_pair.avaliacao.key_name
   vpc_security_group_ids      = [aws_security_group.vm2_api.id]
