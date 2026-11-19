@@ -6,7 +6,7 @@
 |--------------------------------|-----------|
 | Calebe Matheus Moreira Moraes  | 24000974  |
 | Lucas Vigo Calió               | 24000092  |
-| Leandro José de Carvalho       | 240001964 |
+| Leandro José de Carvalho       | 24001964  |
 
 ## Endereço da aplicação
 
